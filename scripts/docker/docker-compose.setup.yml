@@ -1,0 +1,115 @@
+# Docker Compose setup file for initial environment validation
+# This file contains minimal services to validate the setup
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database for the Todo Chatbot
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo_user -d todo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka using Redpanda (Kafka-compatible)
+  kafka:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - "512M"
+      - --overprovisioned
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://kafka:9092
+    ports:
+      - "9092:9092"
+      - "8081:8081" # Schema Registry
+      - "8082:8082" # REST Proxy
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Simple validation service to test the setup
+  setup-validator:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://todo_user:todo_pass@db:5432/todo_db
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_URL=redis://redis:6379
+    command: >
+      sh -c "
+        echo 'Setup validation starting...' &&
+        python -c '
+        import sys
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host=\"db\",
+                database=\"todo_db\",
+                user=\"todo_user\",
+                password=\"todo_pass\"
+            )
+            print(\"✓ Database connection successful\")
+            conn.close()
+        except Exception as e:
+            print(f\"✗ Database connection failed: {e}\")
+            sys.exit(1)
+
+        try:
+            import redis
+            r = redis.Redis(host=\"redis\", port=6379, db=0)
+            r.ping()
+            print(\"✓ Redis connection successful\")
+        except Exception as e:
+            print(f\"✗ Redis connection failed: {e}\")
+            sys.exit(1)
+
+        try:
+            from kafka import KafkaProducer
+            producer = KafkaProducer(bootstrap_servers=[\"kafka:9092\"])
+            print(\"✓ Kafka connection successful\")
+        except Exception as e:
+            print(f\"✗ Kafka connection failed: {e}\")
+            sys.exit(1)
+
+        print(\"✓ All services are accessible and working correctly\")
+        '
+      "
+
+volumes:
+  postgres_data:
