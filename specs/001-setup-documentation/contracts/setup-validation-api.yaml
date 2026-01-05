@@ -1,0 +1,105 @@
+# Setup Validation API Contract
+
+## Overview
+This contract defines the API for validating the development environment setup for the Todo Chatbot project.
+
+## Endpoints
+
+### GET /api/setup/validate
+**Purpose**: Validates that all required dependencies are properly installed and configured.
+
+**Request**:
+- Method: GET
+- Path: /api/setup/validate
+- Headers: None required
+- Query Parameters: None
+
+**Response**:
+- Status: 200 OK
+- Content-Type: application/json
+
+**Response Body**:
+```json
+{
+  "status": "success|error",
+  "timestamp": "ISO 8601 datetime",
+  "results": [
+    {
+      "dependency": "docker|kubectl|dapr|python|node",
+      "installed": true|false,
+      "version": "version string or null",
+      "valid": true|false,
+      "message": "human-readable status message"
+    }
+  ],
+  "overall": {
+    "passed": true|false,
+    "total_checks": 5,
+    "passed_checks": 4
+  }
+}
+```
+
+**Example Response**:
+```json
+{
+  "status": "success",
+  "timestamp": "2025-12-19T10:30:00Z",
+  "results": [
+    {
+      "dependency": "docker",
+      "installed": true,
+      "version": "24.0.5",
+      "valid": true,
+      "message": "Docker is installed and running"
+    },
+    {
+      "dependency": "kubectl",
+      "installed": true,
+      "version": "v1.28.2",
+      "valid": true,
+      "message": "kubectl is installed"
+    },
+    {
+      "dependency": "dapr",
+      "installed": true,
+      "version": "1.11.0",
+      "valid": true,
+      "message": "Dapr CLI is installed"
+    },
+    {
+      "dependency": "python",
+      "installed": true,
+      "version": "3.11.5",
+      "valid": true,
+      "message": "Python 3.9+ is installed"
+    },
+    {
+      "dependency": "node",
+      "installed": true,
+      "version": "v18.17.0",
+      "valid": true,
+      "message": "Node.js 18+ is installed"
+    }
+  ],
+  "overall": {
+    "passed": true,
+    "total_checks": 5,
+    "passed_checks": 5
+  }
+}
+```
+
+### POST /api/setup/generate-config
+**Purpose**: Generates configuration files for the development environment based on the current system.
+
+**Request**:
+- Method: POST
+- Path: /api/setup/generate-config
+- Headers: Content-Type: application/json
+- Body: System information and preferences
+
+**Response**:
+- Status: 200 OK
+- Content-Type: application/json
+- Response Body: Configuration file content
