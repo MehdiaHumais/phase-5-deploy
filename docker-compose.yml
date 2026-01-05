@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Main Todo Chatbot API with Dapr sidecar
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://todo_user:todo_pass@db:5432/todo_db
+      - KAFKA_BROKERS=kafka:9092
+      - REDIS_URL=redis://redis:6379
+      - TODO_CHATBOT_ENV=docker
+      - TODO_CHATBOT_PORT=8000
+      - DAPR_GRPC_PORT=50001
+      - DAPR_HTTP_PORT=3500
+    depends_on:
+      - db
+      - kafka
+      - redis
+    command: >
+      sh -c "
+        # Wait for Dapr sidecar to be ready
+        sleep 10 &&
+        dapr run --app-id todo-api --app-port 8000 --dapr-grpc-port 50001 -- uvicorn main:app --host 0.0.0.0 --port 8000
+      "
+    volumes:
+      - .:/app
+      - /app/__pycache__  # Avoid sharing Python cache with host
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Remove init.sql reference if it doesn't exist yet
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # Kafka using Redpanda (Kafka-compatible)
+  kafka:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - "512M"
+      - --overprovisioned
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://kafka:9092
+    ports:
+      - "9092:9092"
+      - "8081:8081" # Schema Registry
+      - "8082:8082" # REST Proxy
+
+  # Dapr placement service
+  dapr-placement:
+    image: docker.io/daprio/dapr:latest
+    command: ["./placement", "-port", "50000"]
+    ports:
+      - "50000:50000"
+
+  # Dapr operator for Kubernetes-like resource management in Docker
+  dapr-operator:
+    image: docker.io/daprio/dapr:latest
+    command: ["./operator", "-kubernetes=false"]
+    environment:
+      - DAPR_HOST_IP=kafka # Use kafka service name as host IP for demo purposes
+
+volumes:
+  postgres_data:

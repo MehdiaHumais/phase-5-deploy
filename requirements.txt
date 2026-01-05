@@ -1,0 +1,9 @@
+fastapi
+  uvicorn
+  pydantic
+  passlib
+  python-jose
+  bcrypt
+  python-multipart
+  python-dotenv
+  openai
